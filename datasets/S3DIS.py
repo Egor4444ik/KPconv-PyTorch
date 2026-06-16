@@ -44,6 +44,7 @@ from utils.mayavi_visu import *
 from datasets.common import grid_subsampling
 from utils.config import bcolors
 
+from Data.lasConverter import lasConverter
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -65,19 +66,9 @@ class S3DISDataset(PointCloudDataset):
         ############
 
         # Dict from labels to names
-        self.label_to_names = {0: 'ceiling',
-                               1: 'floor',
-                               2: 'wall',
-                               3: 'beam',
-                               4: 'column',
-                               5: 'window',
-                               6: 'door',
-                               7: 'chair',
-                               8: 'table',
-                               9: 'bookcase',
-                               10: 'sofa',
-                               11: 'board',
-                               12: 'clutter'}
+        self.label_to_names = {0: 'ground',
+                               1: 'bush',
+                               2: 'tree'}
 
         # Initialize a bunch of variables concerning class labels
         self.init_labels()
@@ -86,7 +77,7 @@ class S3DISDataset(PointCloudDataset):
         self.ignored_labels = np.array([])
 
         # Dataset folder
-        self.path = '../../Data/S3DIS'
+        self.path = 'Data/S3DIS'
 
         # Type of task conducted on this dataset
         self.dataset_task = 'cloud_segmentation'
@@ -111,9 +102,10 @@ class S3DISDataset(PointCloudDataset):
         ply_path = join(self.path, self.train_path)
 
         # Proportion of validation scenes
-        self.cloud_names = ['Area_1', 'Area_2', 'Area_3', 'Area_4', 'Area_5', 'Area_6']
-        self.all_splits = [0, 1, 2, 3, 4, 5]
-        self.validation_split = 4
+        self.cloud_names = ['Area_1', 'Area_2']
+        lasConverter(self.cloud_names).toTxt()
+        self.all_splits = [0, 1]
+        self.validation_split = 1
 
         # Number of models used per epoch
         if self.set == 'training':
@@ -682,13 +674,8 @@ class S3DISDataset(PointCloudDataset):
 
                         # Object class and ID
                         tmp = object_name[:-4].split('_')[0]
-                        if tmp in self.name_to_label:
-                            object_class = self.name_to_label[tmp]
-                        elif tmp in ['stairs']:
-                            object_class = self.name_to_label['clutter']
-                        else:
-                            raise ValueError('Unknown object name: ' + str(tmp))
-
+                        object_class = self.name_to_label[tmp]
+                        
                         # Read object points and colors
                         try:
                             object_data = np.loadtxt(object_file, dtype=np.float32)
@@ -918,7 +905,7 @@ class S3DISSampler(Sampler):
     """Sampler for S3DIS"""
 
     def __init__(self, dataset: S3DISDataset):
-        Sampler.__init__(self, dataset)
+        Sampler.__init__(self)
 
         # Dataset used by the sampler (no copy is made in memory)
         self.dataset = dataset
@@ -1208,14 +1195,14 @@ class S3DISSampler(Sampler):
             target_b = self.dataset.config.batch_num
             
             # Expected batch size order of magnitude
-            expected_N = 100000
+            expected_N = 50000
 
             # Calibration parameters. Higher means faster but can also become unstable
             # Reduce Kp and Kd if your GP Uis small as the total number of points per batch will be smaller 
             low_pass_T = 100
-            Kp = expected_N / 200
-            Ki = 0.001 * Kp
-            Kd = 5 * Kp
+            Kp = expected_N / 500
+            Ki = 0.0005 * Kp
+            Kd = 2 * Kp
             finer = False
             stabilized = False
 
@@ -1270,13 +1257,10 @@ class S3DISSampler(Sampler):
 
                     # Update batch limit with P controller
                     self.dataset.batch_limit += Kp * error + Ki * error_I + Kd * error_D
-
-                    # Unstability detection
-                    if not stabilized and self.dataset.batch_limit < 0:
-                        Kp *= 0.1
-                        Ki *= 0.1
-                        Kd *= 0.1
-                        stabilized = True
+                    
+                    # Prevent negative batch limit
+                    if self.dataset.batch_limit < 1:
+                        self.dataset.batch_limit.fill_(1)
 
                     # finer low pass filter when closing in
                     if not finer and np.abs(estim_b - target_b) < 1:
@@ -1310,23 +1294,18 @@ class S3DISSampler(Sampler):
 
             # Plot in case we did not reach convergence
             if not breaking:
-                import matplotlib.pyplot as plt
-
-                print("ERROR: It seems that the calibration have not reached convergence. Here are some plot to understand why:")
-                print("If you notice unstability, reduce the expected_N value")
-                print("If convergece is too slow, increase the expected_N value")
-
-                plt.figure()
-                plt.plot(debug_in)
-                plt.plot(debug_out)
-
-                plt.figure()
-                plt.plot(debug_b)
-                plt.plot(debug_estim_b)
-
-                plt.show()
-
-                a = 1/0
+                print("WARNING: Calibration has not fully converged, but using current values.")
+                print("If you notice instability, reduce the expected_N value")
+                print("If convergence is too slow, increase the expected_N value")
+                # Commented out to allow training to proceed even if calibration didn't fully converge
+                # import matplotlib.pyplot as plt
+                # plt.figure()
+                # plt.plot(debug_in)
+                # plt.plot(debug_out)
+                # plt.figure()
+                # plt.plot(debug_b)
+                # plt.plot(debug_estim_b)
+                # plt.show()
 
 
             # Use collected neighbor histogram to get neighbors limit

@@ -72,7 +72,7 @@ static PyObject* batch_subsampling(PyObject* self, PyObject* args, PyObject* key
 	PyObject* batches_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = { "points", "batches", "features", "classes", "sampleDl", "method", "max_p", "verbose", NULL };
+	static char* kwlist[] = { (char*)"points", (char*)"batches", (char*)"features", (char*)"classes", (char*)"sampleDl", (char*)"method", (char*)"max_p", (char*)"verbose", NULL };
 	float sampleDl = 0.1;
 	const char* method_buffer = "barycenters";
 	int verbose = 0;
@@ -103,14 +103,14 @@ static PyObject* batch_subsampling(PyObject* self, PyObject* args, PyObject* key
 		use_classes = false;
 
 	// Interpret the input objects as numpy arrays.
-	PyObject* points_array = PyArray_FROM_OTF(points_obj, NPY_FLOAT, NPY_IN_ARRAY);
-	PyObject* batches_array = PyArray_FROM_OTF(batches_obj, NPY_INT, NPY_IN_ARRAY);
-	PyObject* features_array = NULL;
-	PyObject* classes_array = NULL;
+	PyArrayObject* points_array = (PyArrayObject*)PyArray_FROMANY(points_obj, NPY_FLOAT, 0, 0, NPY_ARRAY_CARRAY);
+	PyArrayObject* batches_array = (PyArrayObject*)PyArray_FROMANY(batches_obj, NPY_INT, 0, 0, NPY_ARRAY_CARRAY);
+	PyArrayObject* features_array = NULL;
+	PyArrayObject* classes_array = NULL;
 	if (use_feature)
-		features_array = PyArray_FROM_OTF(features_obj, NPY_FLOAT, NPY_IN_ARRAY);
+		features_array = (PyArrayObject*)PyArray_FROMANY(features_obj, NPY_FLOAT, 0, 0, NPY_ARRAY_CARRAY);
 	if (use_classes)
-		classes_array = PyArray_FROM_OTF(classes_obj, NPY_INT, NPY_IN_ARRAY);
+		classes_array = (PyArrayObject*)PyArray_FROMANY(classes_obj, NPY_INT, 0, 0, NPY_ARRAY_CARRAY);
 
 	// Verify data was load correctly.
 	if (points_array == NULL)
@@ -294,20 +294,20 @@ static PyObject* batch_subsampling(PyObject* self, PyObject* args, PyObject* key
 
 	// Fill output array with values
 	size_t size_in_bytes = subsampled_points.size() * 3 * sizeof(float);
-	memcpy(PyArray_DATA(res_points_obj), subsampled_points.data(), size_in_bytes);
+	memcpy(PyArray_DATA((PyArrayObject*)res_points_obj), subsampled_points.data(), size_in_bytes);
 	size_in_bytes = Nb * sizeof(int);
-	memcpy(PyArray_DATA(res_batches_obj), subsampled_batches.data(), size_in_bytes);
+	memcpy(PyArray_DATA((PyArrayObject*)res_batches_obj), subsampled_batches.data(), size_in_bytes);
 	if (use_feature)
 	{
 		size_in_bytes = subsampled_points.size() * fdim * sizeof(float);
 		res_features_obj = PyArray_SimpleNew(2, feature_dims, NPY_FLOAT);
-		memcpy(PyArray_DATA(res_features_obj), subsampled_features.data(), size_in_bytes);
+		memcpy(PyArray_DATA((PyArrayObject*)res_features_obj), subsampled_features.data(), size_in_bytes);
 	}
 	if (use_classes)
 	{
 		size_in_bytes = subsampled_points.size() * ldim * sizeof(int);
 		res_classes_obj = PyArray_SimpleNew(2, classes_dims, NPY_INT);
-		memcpy(PyArray_DATA(res_classes_obj), subsampled_classes.data(), size_in_bytes);
+		memcpy(PyArray_DATA((PyArrayObject*)res_classes_obj), subsampled_classes.data(), size_in_bytes);
 	}
 
 
@@ -347,7 +347,7 @@ static PyObject* cloud_subsampling(PyObject* self, PyObject* args, PyObject* key
 	PyObject* classes_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = { "points", "features", "classes", "sampleDl", "method", "verbose", NULL };
+	static char* kwlist[] = { (char*)"points", (char*)"features", (char*)"classes", (char*)"sampleDl", (char*)"method", (char*)"verbose", NULL };
 	float sampleDl = 0.1;
 	const char* method_buffer = "barycenters";
 	int verbose = 0;
@@ -377,13 +377,13 @@ static PyObject* cloud_subsampling(PyObject* self, PyObject* args, PyObject* key
 		use_classes = false;
 
 	// Interpret the input objects as numpy arrays.
-	PyObject* points_array = PyArray_FROM_OTF(points_obj, NPY_FLOAT, NPY_IN_ARRAY);
-	PyObject* features_array = NULL;
-	PyObject* classes_array = NULL;
+	PyArrayObject* points_array = (PyArrayObject*)PyArray_FROMANY(points_obj, NPY_FLOAT, 0, 0, NPY_ARRAY_CARRAY);
+	PyArrayObject* features_array = NULL;
+	PyArrayObject* classes_array = NULL;
 	if (use_feature)
-		features_array = PyArray_FROM_OTF(features_obj, NPY_FLOAT, NPY_IN_ARRAY);
+		features_array = (PyArrayObject*)PyArray_FROMANY(features_obj, NPY_FLOAT, 0, 0, NPY_ARRAY_CARRAY);
 	if (use_classes)
-		classes_array = PyArray_FROM_OTF(classes_obj, NPY_INT, NPY_IN_ARRAY);
+		classes_array = (PyArrayObject*)PyArray_FROMANY(classes_obj, NPY_INT, 0, 0, NPY_ARRAY_CARRAY);
 
 	// Verify data was load correctly.
 	if (points_array == NULL)
@@ -530,18 +530,18 @@ static PyObject* cloud_subsampling(PyObject* self, PyObject* args, PyObject* key
 
 	// Fill output array with values
 	size_t size_in_bytes = subsampled_points.size() * 3 * sizeof(float);
-	memcpy(PyArray_DATA(res_points_obj), subsampled_points.data(), size_in_bytes);
+	memcpy(PyArray_DATA((PyArrayObject*)res_points_obj), subsampled_points.data(), size_in_bytes);
 	if (use_feature)
 	{
 		size_in_bytes = subsampled_points.size() * fdim * sizeof(float);
 		res_features_obj = PyArray_SimpleNew(2, feature_dims, NPY_FLOAT);
-		memcpy(PyArray_DATA(res_features_obj), subsampled_features.data(), size_in_bytes);
+		memcpy(PyArray_DATA((PyArrayObject*)res_features_obj), subsampled_features.data(), size_in_bytes);
 	}
 	if (use_classes)
 	{
 		size_in_bytes = subsampled_points.size() * ldim * sizeof(int);
 		res_classes_obj = PyArray_SimpleNew(2, classes_dims, NPY_INT);
-		memcpy(PyArray_DATA(res_classes_obj), subsampled_classes.data(), size_in_bytes);
+		memcpy(PyArray_DATA((PyArrayObject*)res_classes_obj), subsampled_classes.data(), size_in_bytes);
 	}
 
 

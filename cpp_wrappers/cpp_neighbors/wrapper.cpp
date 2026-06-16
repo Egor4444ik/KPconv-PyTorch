@@ -68,7 +68,7 @@ static PyObject* batch_neighbors(PyObject* self, PyObject* args, PyObject* keywd
 	PyObject* s_batches_obj = NULL;
 
 	// Keywords containers
-	static char* kwlist[] = { "queries", "supports", "q_batches", "s_batches", "radius", NULL };
+	static char* kwlist[] = { (char*)"queries", (char*)"supports", (char*)"q_batches", (char*)"s_batches", (char*)"radius", NULL };
 	float radius = 0.1;
 
 	// Parse the input  
@@ -80,10 +80,10 @@ static PyObject* batch_neighbors(PyObject* self, PyObject* args, PyObject* keywd
 
 
 	// Interpret the input objects as numpy arrays.
-	PyObject* queries_array = PyArray_FROM_OTF(queries_obj, NPY_FLOAT, NPY_IN_ARRAY);
-	PyObject* supports_array = PyArray_FROM_OTF(supports_obj, NPY_FLOAT, NPY_IN_ARRAY);
-	PyObject* q_batches_array = PyArray_FROM_OTF(q_batches_obj, NPY_INT, NPY_IN_ARRAY);
-	PyObject* s_batches_array = PyArray_FROM_OTF(s_batches_obj, NPY_INT, NPY_IN_ARRAY);
+	PyArrayObject* queries_array = (PyArrayObject*)PyArray_FROMANY(queries_obj, NPY_FLOAT, 0, 0, NPY_ARRAY_CARRAY);
+	PyArrayObject* supports_array = (PyArrayObject*)PyArray_FROMANY(supports_obj, NPY_FLOAT, 0, 0, NPY_ARRAY_CARRAY);
+	PyArrayObject* q_batches_array = (PyArrayObject*)PyArray_FROMANY(q_batches_obj, NPY_INT, 0, 0, NPY_ARRAY_CARRAY);
+	PyArrayObject* s_batches_array = (PyArrayObject*)PyArray_FROMANY(s_batches_obj, NPY_INT, 0, 0, NPY_ARRAY_CARRAY);
 
 	// Verify data was load correctly.
 	if (queries_array == NULL)
@@ -217,11 +217,12 @@ static PyObject* batch_neighbors(PyObject* self, PyObject* args, PyObject* keywd
 
 	// Create output array
 	PyObject* res_obj = PyArray_SimpleNew(2, neighbors_dims, NPY_INT);
+	PyArrayObject* res_array = (PyArrayObject*)res_obj;
 	PyObject* ret = NULL;
 
 	// Fill output array with values
 	size_t size_in_bytes = Nq * max_neighbors * sizeof(int);
-	memcpy(PyArray_DATA(res_obj), neighbors_indices.data(), size_in_bytes);
+	memcpy(PyArray_DATA(res_array), neighbors_indices.data(), size_in_bytes);
 
 	// Merge results
 	ret = Py_BuildValue("N", res_obj);

@@ -32,6 +32,7 @@ from os import makedirs, remove
 from os.path import exists, join
 import time
 import sys
+from pathlib import Path
 
 # PLY reader
 from utils.ply import read_ply, write_ply
@@ -56,7 +57,7 @@ class ModelTrainer:
     # Initialization methods
     # ------------------------------------------------------------------------------------------------------------------
 
-    def __init__(self, net, config, chkp_path=None, finetune=False, on_gpu=True):
+    def __init__(self, net, config, chkp_path=None, finetune=False, on_gpu=False):
         """
         Initialize training parameters and reload previous model for restore/finetune
         :param net: network object
@@ -66,13 +67,33 @@ class ModelTrainer:
         :param on_gpu: Train on GPU or CPU
         """
 
+        if chkp_path is None:
+            logs = sorted(Path("results").glob("Log_*"))
+
+            if logs:
+                latest_log = logs[-1]
+
+                checkpoint = latest_log / "checkpoints" / "current_chkp.tar"
+                print("CHECKPOINT:", checkpoint)
+
+                if checkpoint.exists():
+                    chkp_path = checkpoint
+
+        if chkp_path:
+            checkpoint = torch.load(chkp_path)
+
+            net.load_state_dict(checkpoint['model_state_dict'])
+            self.epoch = checkpoint['epoch']
+
+            config.saving_path = checkpoint['saving_path']
+
         ############
         # Parameters
         ############
 
-        # Epoch index
-        self.epoch = 0
-        self.step = 0
+        else:
+            self.epoch = 0
+            self.step = 0
 
         # Optimizer with specific learning rate for deformable KPConv
         deform_params = [v for k, v in net.named_parameters() if 'offset' in k]
@@ -83,6 +104,8 @@ class ModelTrainer:
                                          lr=config.learning_rate,
                                          momentum=config.momentum,
                                          weight_decay=config.weight_decay)
+        if checkpoint is not None:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
         # Choose to train on CPU or GPU
         if on_gpu and torch.cuda.is_available():
@@ -90,6 +113,8 @@ class ModelTrainer:
         else:
             self.device = torch.device("cpu")
         net.to(self.device)
+
+        self.on_gpu = on_gpu
 
         ##########################
         # Load previous checkpoint
@@ -133,7 +158,7 @@ class ModelTrainer:
 
         if config.saving:
             # Training log file
-            with open(join(config.saving_path, 'training.txt'), "w") as file:
+            with open(join(config.saving_path, 'training.txt'), "a") as file:
                 file.write('epochs steps out_loss offset_loss train_accuracy time\n')
 
             # Killing file (simply delete this file when you want to stop the training)
@@ -199,9 +224,9 @@ class ModelTrainer:
                     torch.nn.utils.clip_grad_value_(net.parameters(), config.grad_clip_norm)
                 self.optimizer.step()
 
-                
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize(self.device)
+                if self.on_gpu:
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize(self.device)
 
                 t += [time.time()]
 
@@ -345,7 +370,8 @@ class ModelTrainer:
             probs += [softmax(outputs).cpu().detach().numpy()]
             targets += [batch.labels.cpu().numpy()]
             obj_inds += [batch.model_inds.cpu().numpy()]
-            torch.cuda.synchronize(self.device)
+            
+            if self.on_gpu: torch.cuda.synchronize(self.device)
 
             # Average timing
             t += [time.time()]
@@ -486,7 +512,7 @@ class ModelTrainer:
             lengths = batch.lengths[0].cpu().numpy()
             in_inds = batch.input_inds.cpu().numpy()
             cloud_inds = batch.cloud_inds.cpu().numpy()
-            torch.cuda.synchronize(self.device)
+            if self.on_gpu: torch.cuda.synchronize(self.device)
 
             # Get predictions and labels per instance
             # ***************************************
@@ -719,7 +745,7 @@ class ModelTrainer:
             r_inds_list = batch.reproj_inds
             r_mask_list = batch.reproj_masks
             labels_list = batch.val_labels
-            torch.cuda.synchronize(self.device)
+            if self.on_gpu: torch.cuda.synchronize(self.device)
 
             # Get predictions and labels per instance
             # ***************************************
