@@ -16,3 +16,12 @@ __pycache__/
 
 # C extensions
 *.so
+
+Data/S3DIS/
+Data/S3DIS/**/Annotations/
+Data/S3DIS/**/*.ply
+Data/S3DIS/**/*.pkl
+Data/S3DIS/input_0.030
+
+*.ply
+*.pkl
