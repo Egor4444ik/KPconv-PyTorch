@@ -46,6 +46,10 @@ from utils.config import bcolors
 
 from Data.lasConverter import lasConverter
 
+from utils.config import Config
+
+from Data.aloneLasConverter import LASOrganizer
+
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Dataset class definition
@@ -660,47 +664,58 @@ class S3DISDataset(PointCloudDataset):
             cloud_colors = np.empty((0, 3), dtype=np.uint8)
             cloud_classes = np.empty((0, 1), dtype=np.int32)
 
-            # Loop over rooms
-            for i, room_folder in enumerate(room_folders):
+            if not Config.NOTLASSINGLE:
+                txt_obj, classes = LASOrganizer.file_finding()
 
-                print('Cloud %s - Room %d/%d : %s' % (cloud_name, i+1, len(room_folders), room_folder.split('/')[-1]))
+                for cls in classes:
+                    cloud_points = np.vstack((cloud_points, txt_obj[cls][:, 0:3].astype(np.float32)))
+                    cloud_colors = np.vstack((cloud_colors, txt_obj[cls][:, 3:6].astype(np.uint8)))
+                    object_classes = np.full((txt_obj.shape[0], 1), txt_obj[cls][-1], dtype=np.int32)
+                    cloud_classes = np.vstack((cloud_classes, object_classes))
+            
+            else:
+                # Loop over rooms
+                for i, room_folder in enumerate(room_folders):
 
-                for object_name in listdir(join(room_folder, 'Annotations')):
+                    print('Cloud %s - Room %d/%d : %s' % (cloud_name, i+1, len(room_folders), room_folder.split('/')[-1]))
 
-                    if object_name[-4:] == '.txt':
+                    for object_name in listdir(join(room_folder, 'Annotations')):
 
-                        # Text file containing point of the object
-                        object_file = join(room_folder, 'Annotations', object_name)
+                        if object_name[-4:] == '.txt':
 
-                        # Object class and ID
-                        tmp = object_name[:-4].split('_')[0]
-                        object_class = self.name_to_label[tmp]
-                        
-                        # Read object points and colors
-                        try:
-                            object_data = np.loadtxt(object_file, dtype=np.float32)
-                        except ValueError:
-                            # Correct bug in S3DIS dataset
-                            warnings.warn('Bugs in: ' + object_file + '. Try fixing...')
-                            import re
-                            pattern = r'[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]'
-                            with open(object_file, 'r') as f:
-                                lines = f.readlines()
-                            for l_i, line in enumerate(lines):
-                                if re.search(pattern, line):
-                                    print('Line %d contains non-ascii characters. Fixing...' % l_i)
-                                    ref_n = len(lines[l_i - 1].strip().split())
-                                    cur_n = len(lines[l_i].strip().split())
-                                    lines[l_i] = re.sub(pattern, '' if cur_n == ref_n else ' ', line)
-                            with open(object_file, 'w') as f:
-                                f.writelines(lines)
-                            object_data = np.loadtxt(object_file, dtype=np.float32)
+                            # Text file containing point of the object
+                            object_file = join(room_folder, 'Annotations', object_name)
 
-                        # Stack all data
-                        cloud_points = np.vstack((cloud_points, object_data[:, 0:3].astype(np.float32)))
-                        cloud_colors = np.vstack((cloud_colors, object_data[:, 3:6].astype(np.uint8)))
-                        object_classes = np.full((object_data.shape[0], 1), object_class, dtype=np.int32)
-                        cloud_classes = np.vstack((cloud_classes, object_classes))
+                            # Object class and ID
+                            tmp = object_name[:-4].split('_')[0]
+                            object_class = self.name_to_label[tmp]
+                            
+                            # Read object points and colors
+                            try:
+                                object_data = np.loadtxt(object_file, dtype=np.float32)
+                                
+                            except ValueError:
+                                # Correct bug in S3DIS dataset
+                                warnings.warn('Bugs in: ' + object_file + '. Try fixing...')
+                                import re
+                                pattern = r'[\x00-\x09\x0B-\x0C\x0E-\x1F\x7F-\x9F]'
+                                with open(object_file, 'r') as f:
+                                    lines = f.readlines()
+                                for l_i, line in enumerate(lines):
+                                    if re.search(pattern, line):
+                                        print('Line %d contains non-ascii characters. Fixing...' % l_i)
+                                        ref_n = len(lines[l_i - 1].strip().split())
+                                        cur_n = len(lines[l_i].strip().split())
+                                        lines[l_i] = re.sub(pattern, '' if cur_n == ref_n else ' ', line)
+                                with open(object_file, 'w') as f:
+                                    f.writelines(lines)
+                                object_data = np.loadtxt(object_file, dtype=np.float32)
+
+                            # Stack all data
+                            cloud_points = np.vstack((cloud_points, object_data[:, 0:3].astype(np.float32)))
+                            cloud_colors = np.vstack((cloud_colors, object_data[:, 3:6].astype(np.uint8)))
+                            object_classes = np.full((object_data.shape[0], 1), object_class, dtype=np.int32)
+                            cloud_classes = np.vstack((cloud_classes, object_classes))
 
             # Save as ply
             write_ply(cloud_file,
