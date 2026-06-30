@@ -9,9 +9,13 @@ class LASOrganizer:
     def __init__(self, base_path='Data/S3DIS', Areas = ['Area_1', 'Area_2', 'Area_3', 'Area_4', 'Area_5', 'Area_6']):
         self.base_path = Path(base_path)
         self.folder_paths = [Path(f"Data/S3DIS/{Area}") for Area in Areas]
+        self.S3DIS_path = Path(f"Data/S3DIS")
 
     def file_finding(self):
-        for folder_path in self.folder_paths:
+
+        
+        #for folder_path in self.folder_paths:
+            folder_path = self.S3DIS_path
             if folder_path.exists():
                 laSpattern = re.compile(r'([^\\/]+)(?=\.las$)')
                 laZpattern = re.compile(r'([^\\/]+)(?=\.laz$)')
@@ -19,6 +23,7 @@ class LASOrganizer:
                 for file in os.listdir(folder_path):
                     match = laSpattern.search(file) or laZpattern.search(file)
                     if match:
+                        print('las/laz file fined:', file)
                         las = laspy.read(folder_path.joinpath(file))
                         
                         return las
@@ -27,16 +32,17 @@ class LASOrganizer:
                         np.savetxt(folder_path.joinpath(f"{file_name}.txt"), data, fmt=fmt_spec, delimiter=" ")
 
                         print(f"{file_name}.txt saved")
+            else:
+                print("folder_path doesnt exists")
 
         
     
     
     def one_las_to_cls_num_txt_files(self, 
-                                   one_las: str, 
                                    area_name: str = 'Area_1',
                                    region_name: str = 'forest_1'):
-        one_las = self.file_finding()
-        las = laspy.read(one_las)
+        
+        las = self.file_finding()
 
         data = {}
 
@@ -47,14 +53,14 @@ class LASOrganizer:
             y = las.y[mask]
             z = las.z[mask]
 
-            r = las.red.astype(np.uint8)[mask]
-            g = las.green.astype(np.uint8)[mask]
-            b = las.blue.astype(np.uint8)[mask]
+            r = np.asarray(las.red[mask]).astype(np.uint8)
+            g = np.asarray(las.green[mask]).astype(np.uint8)
+            b = np.asarray(las.blue[mask]).astype(np.uint8)
 
-            intensity = las.intensity.astype(np.float64)[mask]
-            return_num = las.return_number.astype(np.float64)[mask]
-            num_returns = las.number_of_returns.astype(np.float64)[mask]
-            classification = las.classification.astype(np.float64)[mask]
+            intensity = np.asarray(las.intensity[mask]).astype(np.float64)
+            return_num = np.asarray(las.return_number[mask]).astype(np.float64)
+            num_returns = np.asarray(las.number_of_returns[mask]).astype(np.float64)
+            classification = np.asarray(las.classification[mask]).astype(np.float64)
 
             data[cls] = np.column_stack((x, y, z, r, g, b, intensity, return_num, num_returns, classification))
 

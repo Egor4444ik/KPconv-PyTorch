@@ -104,8 +104,9 @@ class ModelTrainer:
                                          lr=config.learning_rate,
                                          momentum=config.momentum,
                                          weight_decay=config.weight_decay)
-        if checkpoint is not None:
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if logs:
+            if checkpoint is not None:
+                self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
         # Choose to train on CPU or GPU
         if on_gpu and torch.cuda.is_available():

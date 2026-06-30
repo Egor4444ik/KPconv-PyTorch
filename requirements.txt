@@ -5,3 +5,4 @@ PyYAML
 matplotlib
 PyQt5
 laspy
+laszip

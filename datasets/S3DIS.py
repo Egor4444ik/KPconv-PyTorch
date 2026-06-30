@@ -45,10 +45,10 @@ from datasets.common import grid_subsampling
 from utils.config import bcolors
 
 from Data.lasConverter import lasConverter
+from Data.aloneLasConverter import LASOrganizer
+from Data.oneLaszToManyTxt import lasToTxt
 
 from utils.config import Config
-
-from Data.aloneLasConverter import LASOrganizer
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -106,8 +106,9 @@ class S3DISDataset(PointCloudDataset):
         ply_path = join(self.path, self.train_path)
 
         # Proportion of validation scenes
-        self.cloud_names = ['Area_1', 'Area_2']
+        self.cloud_names = ['Area_1', 'Area_2', 'Area_3', 'Area_4', 'Area_5', 'Area_6']
         lasConverter(self.cloud_names).toTxt()
+        lasToTxt(Areas = self.cloud_names).one_to_many_by_classes()
         self.all_splits = [0, 1]
         self.validation_split = 1
 
@@ -648,6 +649,7 @@ class S3DISDataset(PointCloudDataset):
         if not exists(ply_path):
             makedirs(ply_path)
 
+        
         for cloud_name in self.cloud_names:
 
             # Pass if the cloud has already been computed
@@ -665,12 +667,12 @@ class S3DISDataset(PointCloudDataset):
             cloud_classes = np.empty((0, 1), dtype=np.int32)
 
             if not Config.NOTLASSINGLE:
-                txt_obj, classes = LASOrganizer.file_finding()
+                txt_obj, classes = LASOrganizer().one_las_to_cls_num_txt_files()
 
                 for cls in classes:
                     cloud_points = np.vstack((cloud_points, txt_obj[cls][:, 0:3].astype(np.float32)))
                     cloud_colors = np.vstack((cloud_colors, txt_obj[cls][:, 3:6].astype(np.uint8)))
-                    object_classes = np.full((txt_obj.shape[0], 1), txt_obj[cls][-1], dtype=np.int32)
+                    object_classes = np.full((txt_obj[cls].shape[0], 1), cls, dtype=np.int32)
                     cloud_classes = np.vstack((cloud_classes, object_classes))
             
             else:

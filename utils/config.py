@@ -36,7 +36,7 @@ class Config:
     Class containing the parameters you want to modify for this dataset
     """
 
-    NOTLASSINGLE = False
+    NOTLASSINGLE = True
 
     ##################
     # Input parameters
