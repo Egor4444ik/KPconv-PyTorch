@@ -52,149 +52,195 @@ class lasToTxt:
         return areas[:n]
 
     
-    def one_to_many_by_classes (self, region_name: str = 'forest_1'):
-        
-        data = {}
+    def one_to_many_by_classes(self, region_name: str = 'forest_1'):
+        # 1. Загружаем все данные один раз
+        x_all = np.asarray(self.las.x)
+        y_all = np.asarray(self.las.y)
+        z_all = np.asarray(self.las.z)
+        classification_all = np.asarray(self.las.classification)
+        intensity_all = np.asarray(self.las.intensity, dtype=np.float64)
+        return_num_all = np.asarray(self.las.return_number, dtype=np.float64)
+        num_returns_all = np.asarray(self.las.number_of_returns, dtype=np.float64)
 
-        unique_classes = np.unique(self.las.classification)
-        for cls in unique_classes:
-            print('Unique classes:', unique_classes)
+        # Проверяем наличие цвета
+        has_color = hasattr(self.las, 'red')
+        if has_color:
+            r_all = np.asarray(self.las.red, dtype=np.uint8)
+            g_all = np.asarray(self.las.green, dtype=np.uint8)
+            b_all = np.asarray(self.las.blue, dtype=np.uint8)
+            print('Las object has real colors.')
+        else:
+            # Создаём нулевые массивы, реальный цвет будет назначен позже для каждого экземпляра
+            r_all = np.zeros_like(x_all, dtype=np.uint8)
+            g_all = np.zeros_like(x_all, dtype=np.uint8)
+            b_all = np.zeros_like(x_all, dtype=np.uint8)
+            print('Las object is not colored. Procedural coloring will be applied after clustering.')
 
-            mask = cls==self.las.classification
-
-            x =self.las.x[mask]
-            y =self.las.y[mask]
-            z =self.las.z[mask]
-
-            las_attrs = self.las.__dict__
-            las_dir = self.las.__dir__
-            las_dir2 = dir(self.las)
-
-            las_points_attrs = self.las._points.__dict__
-            las_points_dir = self.las._points.__dir__
-            las_points_dir2 = dir(self.las._points)
-
-            print('las file attributes:', las_attrs)
-            print('las_dir:', las_dir)
-            print('las_dir2:', las_dir2)
-
-            print('las_points_attrs:', las_points_attrs)
-            print('las_points_dir:', las_points_dir)
-            print('las_points_dir2:', las_points_dir2)
-
-            has_color = hasattr(self.las, 'red')
-            if has_color:
-                print('Las object is collored')
-                r = np.asarray(self.las.red[mask]).astype(np.uint8)
-                g = np.asarray(self.las.green[mask]).astype(np.uint8)
-                b = np.asarray(self.las.blue[mask]).astype(np.uint8)
-            else:
-                print('Las object is not collored')
-                print('Default colloring started')
-                #palitra = ObjColloring(self.las, mask)
-                #r, g, b = palitra.colloring()
-                print('Default colloring ended')
-
-
-            intensity = np.asarray(self.las.intensity[mask]).astype(np.float64)
-            return_num = np.asarray(self.las.return_number[mask]).astype(np.float64)
-            num_returns = np.asarray(self.las.number_of_returns[mask]).astype(np.float64)
-            classification = np.asarray(self.las.classification[mask]).astype(np.float64)
-
-            data = np.column_stack((x, y, z, r, g, b, intensity, return_num, num_returns, classification))
-            
-            x_min, x_max = x.min(), x.max()
-            y_min, y_max = y.min(), y.max()
-            bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
+        # 2. Границы облака для разбиения на зоны
+        x_min, x_max = x_all.min(), x_all.max()
+        y_min, y_max = y_all.min(), y_all.max()
+        bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
 
         fmt_spec = ["%.8f", "%.8f", "%.8f", "%d", "%d", "%d", "%f", "%f", "%f", "%f"]
 
-        # Обрабатываем каждую зону
+        # 3. Обработка каждой зоны
         for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
-            area_name = self.Areas[area_idx]   # берём имя из списка
-            # Создаём папку Annotations внутри зоны (как в S3DIS)
+            area_name = self.Areas[area_idx]
             annot_dir = self.base_path / area_name / 'Annotations'
             annot_dir.mkdir(parents=True, exist_ok=True)
 
-            # Маска точек в зоне
-            zone_mask = (x >= x0) & (x < x1) & (y >= y0) & (y < y1)
+            # Маска зоны
+            zone_mask = (x_all >= x0) & (x_all < x1) & (y_all >= y0) & (y_all < y1)
             if zone_mask.sum() < 100:
                 print(f'{area_name}: слишком мало точек, пропускаем.')
                 continue
 
-            zx, zy, zz = x[zone_mask], y[zone_mask], z[zone_mask]
-            zr, zg, zb = r[zone_mask], g[zone_mask], b[zone_mask]
-            zi = intensity[zone_mask]
-            zrn = return_num[zone_mask]
-            znr = num_returns[zone_mask]
-            zcls = classification[zone_mask]
+            # Вырезаем данные зоны
+            zx = x_all[zone_mask]
+            zy = y_all[zone_mask]
+            zz = z_all[zone_mask]
+            zr = r_all[zone_mask]
+            zg = g_all[zone_mask]
+            zb = b_all[zone_mask]
+            zi = intensity_all[zone_mask]
+            zrn = return_num_all[zone_mask]
+            znr = num_returns_all[zone_mask]
+            zcls = classification_all[zone_mask]
 
-            # Для каждого класса внутри зоны
+            # 4. Для каждого класса внутри зоны
             for cls_id, cls_name in self.class_names.items():
                 cmask = (zcls == cls_id)
                 if cmask.sum() == 0:
                     continue
+
                 cx, cy, cz = zx[cmask], zy[cmask], zz[cmask]
-                cr, cg, cb = zr[cmask], zg[cmask], zb[cmask]
                 ci = zi[cmask]
                 crn = zrn[cmask]
                 cnr = znr[cmask]
-                cls_data = np.column_stack((cx, cy, cz, cr, cg, cb, ci, crn, cnr,
-                                            np.full(cx.shape, cls_id, dtype=np.float64)))
+                # Пока берём цвета из зоны (для настоящих цветов они уже есть, для процедурных пока нули)
+                cr = zr[cmask]
+                cg = zg[cmask]
+                cb = zb[cmask]
 
-                # Разделение на экземпляры
-                if cls_id == 2:          # Ground – один объект
+                cls_data = np.column_stack((
+                    cx, cy, cz, cr, cg, cb, ci, crn, cnr,
+                    np.full(cx.shape, cls_id, dtype=np.float64)
+                ))
+
+                # 5. Разделение на экземпляры
+                if cls_id == 2:  # Ground – один объект
                     instances = [cls_data]
                     print(f'{area_name}/{cls_name}: 1 (Ground) instance')
-                else:                    # растительность – кластеризуем
+                else:            # растительность и прочее – кластеризуем
                     coords = np.column_stack((cx, cy, cz))
                     clustering = DBSCAN(eps=0.3, min_samples=10).fit(coords)
                     labels = clustering.labels_
                     instances = []
                     for lbl in np.unique(labels):
-                        if lbl == -1:    # шум пропускаем
+                        if lbl == -1:    # шум DBSCAN пропускаем
                             continue
                         instances.append(cls_data[labels == lbl])
-                    print(f'{area_name}/{cls_name}: {len(instances)} instances founded')
+                    print(f'{area_name}/{cls_name}: {len(instances)} instances found')
 
-                # Сохраняем каждый экземпляр с нужным именем
+                # 6. Раскрашиваем каждый экземпляр (только если исходный файл без цвета)
                 for inst_id, inst_pts in enumerate(instances, start=1):
+                    if not has_color:
+                        # Вызываем функцию раскраски для этого экземпляра
+                        inst_x = inst_pts[:, 0]
+                        inst_y = inst_pts[:, 1]
+                        inst_z = inst_pts[:, 2]
+                        new_r, new_g, new_b = color_instance(inst_x, inst_y, inst_z, cls_id)
+                        inst_pts[:, 3] = new_r
+                        inst_pts[:, 4] = new_g
+                        inst_pts[:, 5] = new_b
+
+                    # Сохраняем
                     fname = annot_dir / f'{cls_name}_{inst_id}.txt'
                     np.savetxt(fname, inst_pts, fmt=fmt_spec, delimiter=' ')
                     print(f'  {inst_pts.shape[0]} points saved to {fname}')
 
-            print('clustering done.')
-            
-            '''fmt_spec = ["%.8f", "%.8f", "%.8f", "%d", "%d", "%d", "%f", "%f", "%f", "%f"]
+            print(f'{area_name} processing done.')
+    
+    def color_instance(x, y, z, class_id):
+        """
+        Генерирует RGB‑цвета для одного экземпляра (дерева, куста и т.д.)
+        с учётом высоты и класса.
+        """
+        n = len(x)
+        r = np.zeros(n, dtype=np.uint8)
+        g = np.zeros(n, dtype=np.uint8)
+        b = np.zeros(n, dtype=np.uint8)
 
-            cls_name = self.class_names.get(cls, f'class_{cls}')
+        # Нормализуем высоту в пределах экземпляра (0 – низ, 1 – верх)
+        if n > 1 and z.max() > z.min():
+            z_norm = (z - z.min()) / (z.max() - z.min())
+        else:
+            z_norm = np.zeros(n)
 
-            #DBSCAN processing
-            coords = np.column_stack((x, y, z))
+        if class_id in (3, 4, 5):   # Растительность
+            # Цвета: низ – коричневый (ствол), верх – зелёный (крона)
+            bottom = np.array([139, 90, 43])   # Brown
+            if class_id == 3:       # Low vegetation
+                top = np.array([34, 139, 34])
+            elif class_id == 4:     # Medium vegetation
+                top = np.array([0, 128, 0])
+            else:                   # High vegetation (trees)
+                top = np.array([0, 100, 0])
 
-            clustering = DBSCAN(eps=0.3, min_samples=10).fit(coords)
-            labels = clustering.labels_
+            r = (bottom[0] * (1 - z_norm) + top[0] * z_norm).astype(np.uint8)
+            g = (bottom[1] * (1 - z_norm) + top[1] * z_norm).astype(np.uint8)
+            b = (bottom[2] * (1 - z_norm) + top[2] * z_norm).astype(np.uint8)
 
-            instance_list = []
-            instance_ids = []
-            for lbl in np.unique(labels):
-                if lbl == -1:    # noise continue
-                    continue
-                instance_list.append(data[labels == lbl])
-                instance_ids.append(lbl + 1)   # nummering labels after one
-            print(f'  Found {len(instance_list)} instances for class {cls_name}')
+            # Лёгкий шум
+            r = np.clip(r + np.random.randint(-10, 11, n), 0, 255).astype(np.uint8)
+            g = np.clip(g + np.random.randint(-15, 16, n), 0, 255).astype(np.uint8)
+            b = np.clip(b + np.random.randint(-10, 11, n), 0, 255).astype(np.uint8)
 
-            max_instance_id = max(instance_ids)
-            areas_count = len(self.Areas)
-            for inst_id, inst_data in zip(instance_ids, instance_list):
-                    area_num = np.clip(int((inst_id/max_instance_id)*areas_count)+1, 1, areas_count)
-                    output_dir = Path(f"Data/S3DIS/Area_{area_num}"/region_name)
-                    fname = output_dir / f'{cls_name}_{inst_id}.txt'
-                    np.savetxt(fname, inst_data, fmt=fmt_spec, delimiter=" ")
-                    print(f'  Saved {fname} ({inst_data.shape[0]} points)')
+        elif class_id == 2:   # Земля – коричневый с вариациями
+            base = np.array([139, 90, 43])
+            noise = np.random.randint(-15, 16, n)
+            r = np.clip(np.full(n, base[0], dtype=np.int16) + noise, 0, 255).astype(np.uint8)
+            g = np.clip(np.full(n, base[1], dtype=np.int16) + noise, 0, 255).astype(np.uint8)
+            b = np.clip(np.full(n, base[2], dtype=np.int16) + noise, 0, 255).astype(np.uint8)
 
-            np.savetxt(self.folder_paths.joinpath(f"{cls}_.txt"), data, fmt=fmt_spec, delimiter=" ")
+        elif class_id == 7:   # Шум – равномерный RGB
+            third = n // 3
+            colors = np.zeros((n, 3), dtype=np.uint8)
+            colors[:third, 0] = np.random.randint(220, 255, third)
+            colors[:third, 1] = np.random.randint(0, 20, third)
+            colors[:third, 2] = np.random.randint(0, 20, third)
+            if n >= 2*third:
+                colors[third:2*third, 0] = np.random.randint(0, 20, third)
+                colors[third:2*third, 1] = np.random.randint(220, 255, third)
+                colors[third:2*third, 2] = np.random.randint(0, 20, third)
+                colors[2*third:, 0] = np.random.randint(0, 20, n-2*third)
+                colors[2*third:, 1] = np.random.randint(0, 20, n-2*third)
+                colors[2*third:, 2] = np.random.randint(220, 255, n-2*third)
+            else:
+                # если точек меньше, просто случайно распределяем
+                colors[third:, 0] = np.random.randint(0, 20, n-third)
+                colors[third:, 1] = np.random.randint(0, 20, n-third)
+                colors[third:, 2] = np.random.randint(220, 255, n-third)
+            perm = np.random.permutation(n)
+            r = colors[perm, 0]
+            g = colors[perm, 1]
+            b = colors[perm, 2]
 
-            print(f"{cls}.txt saved")
-        return data, np.unique(self.las.classification)
-    '''
+        elif class_id == 12:  # Overlap – оранжевый с полосами
+            base_r = np.random.randint(200, 255, n)
+            base_g = np.random.randint(150, 210, n)
+            base_b = np.random.randint(50, 130, n)
+            scan_mask = np.random.random(n) < 0.3
+            if scan_mask.any():
+                pattern = np.sin(np.arange(n) * 0.5) > 0
+                base_r = np.where(scan_mask & pattern, np.minimum(base_r + 30, 255), base_r)
+                base_g = np.where(scan_mask & pattern, np.minimum(base_g + 30, 255), base_g)
+                base_b = np.where(scan_mask & ~pattern, np.maximum(base_b - 40, 0), base_b)
+            r, g, b = base_r, base_g, base_b
+
+        else:   # Остальные классы – серый
+            r[:] = 169
+            g[:] = 169
+            b[:] = 169
+
+        return r, g, b
