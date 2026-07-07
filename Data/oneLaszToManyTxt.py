@@ -65,6 +65,8 @@ class lasToTxt:
             y =self.las.y[mask]
             z =self.las.z[mask]
 
+            las_attrs = self.las.__dict__
+            print('las file attributes:', las_attrs)
             has_color = hasattr(self.las, 'red')
             if has_color:
                 print('Las object is collored')
