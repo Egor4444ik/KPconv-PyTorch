@@ -13,7 +13,7 @@ class lasToTxt:
         self.base_path = Path(base_path)
         self.folder_paths = [Path(f"Data/S3DIS/{Area}") for Area in self.Areas]
         self.S3DIS_path = Path(f"Data/S3DIS")
-        self.class_names = {1: 'Unassigned', 2: 'Ground', 3: 'LowerBushe', 4: 'HighBushe', 5: 'Tree'}
+        self.class_names = {1: 'Unassigned', 2: 'Ground', 3: 'LowerBushe', 4: 'HighBushe', 5: 'Tree', 7: 'Noise', 12: 'Overlap or Reserved'}
         self.las = self.file_finding()
 
 
@@ -65,9 +65,14 @@ class lasToTxt:
             y =self.las.y[mask]
             z =self.las.z[mask]
 
-            r = np.asarray(self.las.red[mask]).astype(np.uint8)
-            g = np.asarray(self.las.green[mask]).astype(np.uint8)
-            b = np.asarray(self.las.blue[mask]).astype(np.uint8)
+            has_color = hasattr(self.las, 'red')
+            if has_color:
+                print('Las object is collored')
+                r = np.asarray(self.las.red[mask]).astype(np.uint8)
+                g = np.asarray(self.las.green[mask]).astype(np.uint8)
+                b = np.asarray(self.las.blue[mask]).astype(np.uint8)
+            else:
+                print('Las object is not collored')
 
             intensity = np.asarray(self.las.intensity[mask]).astype(np.float64)
             return_num = np.asarray(self.las.return_number[mask]).astype(np.float64)
