@@ -149,7 +149,7 @@ class lasToTxt:
                         inst_x = inst_pts[:, 0]
                         inst_y = inst_pts[:, 1]
                         inst_z = inst_pts[:, 2]
-                        new_r, new_g, new_b = color_instance(inst_x, inst_y, inst_z, cls_id)
+                        new_r, new_g, new_b = self.color_instance(inst_x, inst_y, inst_z, cls_id)
                         inst_pts[:, 3] = new_r
                         inst_pts[:, 4] = new_g
                         inst_pts[:, 5] = new_b
@@ -161,7 +161,7 @@ class lasToTxt:
 
             print(f'{area_name} processing done.')
     
-    def color_instance(x, y, z, class_id):
+    def color_instance(self, x, y, z, class_id):
         """
         Генерирует RGB‑цвета для одного экземпляра (дерева, куста и т.д.)
         с учётом высоты и класса.
