@@ -6,6 +6,7 @@ import re
 import os
 import math
 
+from Data.lasColoring import ObjColloring
 
 class lasToTxt:
     def __init__(self, base_path='Data/S3DIS', Areas = ['Area_1', 'Area_2', 'Area_3', 'Area_4', 'Area_5', 'Area_6']):
@@ -66,7 +67,21 @@ class lasToTxt:
             z =self.las.z[mask]
 
             las_attrs = self.las.__dict__
+            las_dir = self.las.__dir__
+            las_dir2 = dir(self.las)
+
+            las_points_attrs = self.las._points.__dict__
+            las_points_dir = self.las._points.__dir__
+            las_points_dir2 = dir(self.las._points)
+
             print('las file attributes:', las_attrs)
+            print('las_dir:', las_dir)
+            print('las_dir2:', las_dir2)
+
+            print('las_points_attrs:', las_points_attrs)
+            print('las_points_dir:', las_points_dir)
+            print('las_points_dir2:', las_points_dir2)
+
             has_color = hasattr(self.las, 'red')
             if has_color:
                 print('Las object is collored')
@@ -75,6 +90,11 @@ class lasToTxt:
                 b = np.asarray(self.las.blue[mask]).astype(np.uint8)
             else:
                 print('Las object is not collored')
+                print('Default colloring started')
+                #palitra = ObjColloring(self.las, mask)
+                #r, g, b = palitra.colloring()
+                print('Default colloring ended')
+
 
             intensity = np.asarray(self.las.intensity[mask]).astype(np.float64)
             return_num = np.asarray(self.las.return_number[mask]).astype(np.float64)
