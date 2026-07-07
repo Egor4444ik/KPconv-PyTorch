@@ -53,113 +53,108 @@ class lasToTxt:
 
     
     def one_to_many_by_classes(self, region_name: str = 'forest_1'):
-        # 1. Загружаем все данные один раз
-        x_all = np.asarray(self.las.x)
-        y_all = np.asarray(self.las.y)
-        z_all = np.asarray(self.las.z)
-        classification_all = np.asarray(self.las.classification)
-        intensity_all = np.asarray(self.las.intensity, dtype=np.float64)
-        return_num_all = np.asarray(self.las.return_number, dtype=np.float64)
-        num_returns_all = np.asarray(self.las.number_of_returns, dtype=np.float64)
-
-        # Проверяем наличие цвета
+        # 1. Сначала определяем границы облака (легкая операция)
+        x_min, x_max = self.las.x.min(), self.las.x.max()
+        y_min, y_max = self.las.y.min(), self.las.y.max()
+        bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
+        
         has_color = hasattr(self.las, 'red')
         if has_color:
-            r_all = np.asarray(self.las.red, dtype=np.uint8)
-            g_all = np.asarray(self.las.green, dtype=np.uint8)
-            b_all = np.asarray(self.las.blue, dtype=np.uint8)
             print('Las object has real colors.')
         else:
-            # Создаём нулевые массивы, реальный цвет будет назначен позже для каждого экземпляра
-            r_all = np.zeros_like(x_all, dtype=np.uint8)
-            g_all = np.zeros_like(x_all, dtype=np.uint8)
-            b_all = np.zeros_like(x_all, dtype=np.uint8)
-            print('Las object is not colored. Procedural coloring will be applied after clustering.')
-
-        # 2. Границы облака для разбиения на зоны
-        x_min, x_max = x_all.min(), x_all.max()
-        y_min, y_max = y_all.min(), y_all.max()
-        bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
+            print('Las object is not colored. Procedural coloring will be applied.')
 
         fmt_spec = ["%.8f", "%.8f", "%.8f", "%d", "%d", "%d", "%f", "%f", "%f", "%f"]
 
-        # 3. Обработка каждой зоны
+        # 2. Обрабатываем КАЖДУЮ ЗОНУ ОТДЕЛЬНО, загружая только нужные точки
         for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
             area_name = self.Areas[area_idx]
             annot_dir = self.base_path / area_name / 'Annotations'
             annot_dir.mkdir(parents=True, exist_ok=True)
-
-            # Маска зоны
-            zone_mask = (x_all >= x0) & (x_all < x1) & (y_all >= y0) & (y_all < y1)
+            
+            print(f'Processing {area_name}...')
+            
+            # Загружаем только точки в текущей зоне
+            zone_mask = (self.las.x >= x0) & (self.las.x < x1) & (self.las.y >= y0) & (self.las.y < y1)
+            
             if zone_mask.sum() < 100:
-                print(f'{area_name}: слишком мало точек, пропускаем.')
+                print(f'{area_name}: too few points ({zone_mask.sum()}), skipping.')
                 continue
-
-            # Вырезаем данные зоны
-            zx = x_all[zone_mask]
-            zy = y_all[zone_mask]
-            zz = z_all[zone_mask]
-            zr = r_all[zone_mask]
-            zg = g_all[zone_mask]
-            zb = b_all[zone_mask]
-            zi = intensity_all[zone_mask]
-            zrn = return_num_all[zone_mask]
-            znr = num_returns_all[zone_mask]
-            zcls = classification_all[zone_mask]
-
-            # 4. Для каждого класса внутри зоны
+            
+            print(f'{area_name}: {zone_mask.sum()} points in zone')
+            
+            # Извлекаем данные только для этой зоны
+            zx = np.asarray(self.las.x[zone_mask])
+            zy = np.asarray(self.las.y[zone_mask])
+            zz = np.asarray(self.las.z[zone_mask])
+            zcls = np.asarray(self.las.classification[zone_mask])
+            zi = np.asarray(self.las.intensity[zone_mask], dtype=np.float64)
+            zrn = np.asarray(self.las.return_number[zone_mask], dtype=np.float64)
+            znr = np.asarray(self.las.number_of_returns[zone_mask], dtype=np.float64)
+            
+            if has_color:
+                zr = np.asarray(self.las.red[zone_mask], dtype=np.uint8)
+                zg = np.asarray(self.las.green[zone_mask], dtype=np.uint8)
+                zb = np.asarray(self.las.blue[zone_mask], dtype=np.uint8)
+            else:
+                zr = np.zeros_like(zx, dtype=np.uint8)
+                zg = np.zeros_like(zx, dtype=np.uint8)
+                zb = np.zeros_like(zx, dtype=np.uint8)
+            
+            # 3. Для каждого класса внутри зоны
             for cls_id, cls_name in self.class_names.items():
                 cmask = (zcls == cls_id)
                 if cmask.sum() == 0:
                     continue
-
+                
                 cx, cy, cz = zx[cmask], zy[cmask], zz[cmask]
+                cr, cg, cb = zr[cmask], zg[cmask], zb[cmask]
                 ci = zi[cmask]
                 crn = zrn[cmask]
                 cnr = znr[cmask]
-                # Пока берём цвета из зоны (для настоящих цветов они уже есть, для процедурных пока нули)
-                cr = zr[cmask]
-                cg = zg[cmask]
-                cb = zb[cmask]
-
+                
+                # Собираем данные класса
                 cls_data = np.column_stack((
                     cx, cy, cz, cr, cg, cb, ci, crn, cnr,
                     np.full(cx.shape, cls_id, dtype=np.float64)
                 ))
-
-                # 5. Разделение на экземпляры
+                
+                # 4. Кластеризация
                 if cls_id == 2:  # Ground – один объект
                     instances = [cls_data]
-                    print(f'{area_name}/{cls_name}: 1 (Ground) instance')
-                else:            # растительность и прочее – кластеризуем
+                    print(f'  {cls_name}: 1 instance')
+                else:
                     coords = np.column_stack((cx, cy, cz))
                     clustering = DBSCAN(eps=0.3, min_samples=10).fit(coords)
                     labels = clustering.labels_
                     instances = []
                     for lbl in np.unique(labels):
-                        if lbl == -1:    # шум DBSCAN пропускаем
+                        if lbl == -1:
                             continue
                         instances.append(cls_data[labels == lbl])
-                    print(f'{area_name}/{cls_name}: {len(instances)} instances found')
-
-                # 6. Раскрашиваем каждый экземпляр (только если исходный файл без цвета)
+                    print(f'  {cls_name}: {len(instances)} instances')
+                
+                # 5. Раскраска и сохранение
                 for inst_id, inst_pts in enumerate(instances, start=1):
                     if not has_color:
-                        # Вызываем функцию раскраски для этого экземпляра
                         inst_x = inst_pts[:, 0]
                         inst_y = inst_pts[:, 1]
                         inst_z = inst_pts[:, 2]
-                        new_r, new_g, new_b = self.color_instance(inst_x, inst_y, inst_z, cls_id)
+                        new_r, new_g, new_b = color_instance(inst_x, inst_y, inst_z, cls_id)
                         inst_pts[:, 3] = new_r
                         inst_pts[:, 4] = new_g
                         inst_pts[:, 5] = new_b
-
-                    # Сохраняем
+                    
                     fname = annot_dir / f'{cls_name}_{inst_id}.txt'
                     np.savetxt(fname, inst_pts, fmt=fmt_spec, delimiter=' ')
-                    print(f'  {inst_pts.shape[0]} points saved to {fname}')
-
-            print(f'{area_name} processing done.')
+                
+                # Очищаем память
+                del cls_data, instances
+            
+            # Очищаем данные зоны из памяти
+            del zx, zy, zz, zcls, zi, zrn, znr, zr, zg, zb
+            
+            print(f'{area_name} done.')
     
     def color_instance(self, x, y, z, class_id):
         """
