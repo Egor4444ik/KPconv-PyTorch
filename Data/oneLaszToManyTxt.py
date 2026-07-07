@@ -69,6 +69,8 @@ class lasToTxt:
         # 2. Обрабатываем КАЖДУЮ ЗОНУ ОТДЕЛЬНО, загружая только нужные точки
         for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
             area_name = self.Areas[area_idx]
+            if area_name == 'Area_1':
+                continue
             annot_dir = self.base_path / area_name / 'Annotations'
             annot_dir.mkdir(parents=True, exist_ok=True)
             
