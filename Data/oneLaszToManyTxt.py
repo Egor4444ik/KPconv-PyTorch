@@ -51,7 +51,8 @@ class lasToTxt:
     
     def one_to_many_by_classes(self, region_name: str = 'forest_1'):
         # 1. Сначала определяем границы облака (легкая операция)
-        with laspy.open(self.las_file_name) as las:
+            las = laspy.read(self.las_file_name)
+        #with laspy.open(self.las_file_name) as las:
             print("las dirs:", dir(las))
             x_min, x_max = las.x.min(), las.x.max()
             y_min, y_max = las.y.min(), las.y.max()
@@ -165,6 +166,8 @@ class lasToTxt:
                 
                 
                 print(f'{area_name} done.')
+            
+            del las
     
     def color_instance(self, x, y, z, class_id):
         """
