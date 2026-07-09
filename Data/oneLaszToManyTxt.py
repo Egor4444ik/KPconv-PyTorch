@@ -52,6 +52,7 @@ class lasToTxt:
     def one_to_many_by_classes(self, region_name: str = 'forest_1'):
         # 1. Сначала определяем границы облака (легкая операция)
         with laspy.open(self.las_file_name) as las:
+            print("las dirs:", dir(las))
             x_min, x_max = las.x.min(), las.x.max()
             y_min, y_max = las.y.min(), las.y.max()
             bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
