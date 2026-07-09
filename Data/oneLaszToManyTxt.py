@@ -15,7 +15,7 @@ class lasToTxt:
         self.folder_paths = [Path(f"Data/S3DIS/{Area}") for Area in self.Areas]
         self.S3DIS_path = Path(f"Data/S3DIS")
         self.class_names = {1: 'Unassigned', 2: 'Ground', 3: 'LowerBushe', 4: 'HighBushe', 5: 'Tree', 7: 'Noise', 12: 'Overlap or Reserved'}
-        las_file_name = self.file_finding()
+        self.las_file_name = self.file_finding()
 
 
     def file_finding(self):
@@ -88,9 +88,9 @@ class lasToTxt:
                 zy = np.asarray(las.y[zone_mask])
                 zz = np.asarray(las.z[zone_mask])
                 zcls = np.asarray(las.classification[zone_mask])
-                zi = np.asarray(las.intensity[zone_mask], dtype=np.float64)
-                zrn = np.asarray(las.return_number[zone_mask], dtype=np.float64)
-                znr = np.asarray(las.number_of_returns[zone_mask], dtype=np.float64)
+                zi = np.asarray(las.intensity[zone_mask], dtype=np.float32)
+                zrn = np.asarray(las.return_number[zone_mask], dtype=np.float32)
+                znr = np.asarray(las.number_of_returns[zone_mask], dtype=np.float32)
                 
                 if has_color:
                     zr = np.asarray(las.red[zone_mask], dtype=np.uint8)
@@ -120,7 +120,7 @@ class lasToTxt:
                     # Собираем данные класса
                     cls_data = np.column_stack((
                         cx, cy, cz, cr, cg, cb, ci, crn, cnr,
-                        np.full(cx.shape, cls_id, dtype=np.float64)
+                        np.full(cx.shape, cls_id, dtype=np.float32)
                     ))
 
                     del crn, cnr
