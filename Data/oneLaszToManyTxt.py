@@ -36,53 +36,59 @@ class lasToTxt:
 
     def _split_bbox(self, x_min, x_max, y_min, y_max):
         n = len(self.Areas)
-        cols = int(math.ceil(math.sqrt(n * (x_max - x_min) / (y_max - y_min))))
-        if cols > n:
-            cols = n
+        cols = int(math.ceil(math.sqrt(n)))
         rows = int(math.ceil(n / cols))
         x_edges = np.linspace(x_min, x_max, cols + 1)
         y_edges = np.linspace(y_min, y_max, rows + 1)
         areas = []
         for i in range(rows):
             for j in range(cols):
+                if len(areas) >= n:
+                    break
                 areas.append((x_edges[j], x_edges[j+1], y_edges[i], y_edges[i+1]))
-        return areas[:n]
+        return areas
 
     
     def one_to_many_by_classes(self, region_name: str = 'forest_1'):
-        with laspy.open(str(self.las_file_name)) as reader:
-            h = reader.header
-            # --- 1. Определяем реальные границы облака ---
-            if h.x_min == h.x_max == 0.0 or h.y_min == h.y_max == 0.0:
-                print('Header bounds missing, computing from points...')
-                x_min, y_min = float('inf'), float('inf')
-                x_max, y_max = float('-inf'), float('-inf')
-                for chunk in reader.chunk_iterator(2_000_000):
-                    x_min = min(x_min, chunk.x.min())
-                    x_max = max(x_max, chunk.x.max())
-                    y_min = min(y_min, chunk.y.min())
-                    y_max = max(y_max, chunk.y.max())
-                reader.seek(0)   # возвращаем итератор в начало для последующего чтения
-            else:
-                x_min, x_max = h.x_min, h.x_max
-                y_min, y_max = h.y_min, h.y_max
+        # Удаляем старые Annotations, оставшиеся не в комнатах
+        for area in self.Areas:
+            bad_annot = self.base_path / area / 'Annotations'
+            if bad_annot.is_dir():
+                import shutil
+                shutil.rmtree(bad_annot)
+                print(f'Removed leftover {bad_annot}')
 
-            # --- 2. Наличие цвета ---
+        with laspy.open(str(self.las_file_name)) as reader:
+            # Надёжное вычисление границ по всем точкам
+            print('Computing real boundaries from points...')
+            x_min = y_min = float('inf')
+            x_max = y_max = float('-inf')
+            for chunk in reader.chunk_iterator(2_000_000):
+                x_min = min(x_min, chunk.x.min())
+                x_max = max(x_max, chunk.x.max())
+                y_min = min(y_min, chunk.y.min())
+                y_max = max(y_max, chunk.y.max())
+            print(f'Bounds: X[{x_min:.2f}, {x_max:.2f}], Y[{y_min:.2f}, {y_max:.2f}]')
+            reader.seek(0)  # вернуться в начало
+
             dim_names = [dim.name.lower() for dim in reader.header.point_format.dimensions]
             has_color = 'red' in dim_names and 'green' in dim_names and 'blue' in dim_names
             print('Has colors:', has_color)
 
             bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
+            print('Zone boundaries:')
+            for i, bbox in enumerate(bboxes):
+                print(f'  {self.Areas[i]}: {bbox}')
+
             fmt_spec = ["%.8f", "%.8f", "%.8f", "%d", "%d", "%d", "%f", "%f", "%f", "%f"]
 
             for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
                 area_name = self.Areas[area_idx]
-
-                # --- 3. Правильный путь: Area_X / комната / Annotations ---
                 annot_dir = self.base_path / area_name / region_name / 'Annotations'
                 annot_dir.mkdir(parents=True, exist_ok=True)
                 print(f'Processing {area_name}/{region_name}...')
 
+                reader.seek(0)  # начать чтение файла заново для этой зоны
                 zx_list, zy_list, zz_list, zcls_list, zi_list, zrn_list, znr_list = [], [], [], [], [], [], []
                 if has_color:
                     zr_list, zg_list, zb_list = [], [], []
@@ -125,7 +131,6 @@ class lasToTxt:
 
                 print(f'{area_name}/{region_name}: {len(zx)} points in zone')
 
-                # Обработка классов (как у вас)
                 for cls_id, cls_name in self.class_names.items():
                     cmask = (zcls == cls_id)
                     if cmask.sum() == 0:
