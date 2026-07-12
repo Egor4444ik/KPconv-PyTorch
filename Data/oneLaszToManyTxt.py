@@ -76,6 +76,9 @@ class lasToTxt:
             print('Has colors:', has_color)
 
             bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
+
+            print('Zones')
+            print(f'  {self.Areas}')
             print('Zone boundaries:')
             for i, bbox in enumerate(bboxes):
                 print(f'  {self.Areas[i]}: {bbox}')
