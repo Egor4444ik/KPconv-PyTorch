@@ -50,13 +50,24 @@ class lasToTxt:
 
     
     def one_to_many_by_classes(self, region_name: str = 'forest_1'):
-        # Открываем файл потоково – НЕ загружаем его в память целиком
         with laspy.open(str(self.las_file_name)) as reader:
             h = reader.header
-            x_min, x_max = h.x_min, h.x_max
-            y_min, y_max = h.y_min, h.y_max
+            # --- 1. Определяем реальные границы облака ---
+            if h.x_min == h.x_max == 0.0 or h.y_min == h.y_max == 0.0:
+                print('Header bounds missing, computing from points...')
+                x_min, y_min = float('inf'), float('inf')
+                x_max, y_max = float('-inf'), float('-inf')
+                for chunk in reader.chunk_iterator(2_000_000):
+                    x_min = min(x_min, chunk.x.min())
+                    x_max = max(x_max, chunk.x.max())
+                    y_min = min(y_min, chunk.y.min())
+                    y_max = max(y_max, chunk.y.max())
+                reader.seek(0)   # возвращаем итератор в начало для последующего чтения
+            else:
+                x_min, x_max = h.x_min, h.x_max
+                y_min, y_max = h.y_min, h.y_max
 
-            # Проверяем наличие цветовых полей в формате файла
+            # --- 2. Наличие цвета ---
             dim_names = [dim.name.lower() for dim in reader.header.point_format.dimensions]
             has_color = 'red' in dim_names and 'green' in dim_names and 'blue' in dim_names
             print('Has colors:', has_color)
@@ -64,29 +75,22 @@ class lasToTxt:
             bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
             fmt_spec = ["%.8f", "%.8f", "%.8f", "%d", "%d", "%d", "%f", "%f", "%f", "%f"]
 
-            # Обрабатываем каждую зону независимо
             for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
                 area_name = self.Areas[area_idx]
-                # Пропускаем Area_1, если нужно (раскомментируйте при необходимости)
-                # if area_name == 'Area_1':
-                #     continue
 
-                annot_dir = self.base_path / area_name / 'Annotations'
+                # --- 3. Правильный путь: Area_X / комната / Annotations ---
+                annot_dir = self.base_path / area_name / region_name / 'Annotations'
                 annot_dir.mkdir(parents=True, exist_ok=True)
-                print(f'Processing {area_name}...')
+                print(f'Processing {area_name}/{region_name}...')
 
-                # Списки для накопления точек, попавших в зону
                 zx_list, zy_list, zz_list, zcls_list, zi_list, zrn_list, znr_list = [], [], [], [], [], [], []
                 if has_color:
                     zr_list, zg_list, zb_list = [], [], []
 
-                # === Чанковое чтение: проходим по файлу порциями по 2 млн точек ===
                 for chunk in reader.chunk_iterator(2_000_000):
-                    # Быстрая маска для текущего чанка
                     mask = (chunk.x >= x0) & (chunk.x < x1) & (chunk.y >= y0) & (chunk.y < y1)
                     if mask.sum() == 0:
                         continue
-                    # Собираем только нужные точки в списки (не создаём огромные массивы сразу)
                     zx_list.append(np.asarray(chunk.x[mask]))
                     zy_list.append(np.asarray(chunk.y[mask]))
                     zz_list.append(np.asarray(chunk.z[mask]))
@@ -100,10 +104,9 @@ class lasToTxt:
                         zb_list.append(np.asarray(chunk.blue[mask], dtype=np.uint8))
 
                 if not zx_list:
-                    print(f'{area_name}: no points, skipping.')
+                    print(f'{area_name}/{region_name}: no points, skipping.')
                     continue
 
-                # Объединяем чанки в единые массивы для зоны
                 zx = np.concatenate(zx_list)
                 zy = np.concatenate(zy_list)
                 zz = np.concatenate(zz_list)
@@ -120,14 +123,13 @@ class lasToTxt:
                     zg = np.zeros_like(zx, dtype=np.uint8)
                     zb = np.zeros_like(zx, dtype=np.uint8)
 
-                print(f'{area_name}: {len(zx)} points in zone')
+                print(f'{area_name}/{region_name}: {len(zx)} points in zone')
 
-                # === Далее идёт ВАША оригинальная логика обработки классов ===
+                # Обработка классов (как у вас)
                 for cls_id, cls_name in self.class_names.items():
                     cmask = (zcls == cls_id)
                     if cmask.sum() == 0:
                         continue
-
                     cx, cy, cz = zx[cmask], zy[cmask], zz[cmask]
                     cr, cg, cb = zr[cmask], zg[cmask], zb[cmask]
                     ci, crn, cnr = zi[cmask], zrn[cmask], znr[cmask]
@@ -137,8 +139,7 @@ class lasToTxt:
                         np.full(cx.shape, cls_id, dtype=np.float32)
                     ))
 
-                    # Кластеризация
-                    if cls_id == 2:          # Ground – один экземпляр
+                    if cls_id == 2:
                         instances = [cls_data]
                         print(f'  {cls_name}: 1 instance')
                     else:
@@ -152,7 +153,6 @@ class lasToTxt:
                             instances.append(cls_data[labels == lbl])
                         print(f'  {cls_name}: {len(instances)} instances')
 
-                    # Раскраска и сохранение
                     for inst_id, inst_pts in enumerate(instances, start=1):
                         if not has_color:
                             inst_x, inst_y, inst_z = inst_pts[:, 0], inst_pts[:, 1], inst_pts[:, 2]
@@ -163,12 +163,10 @@ class lasToTxt:
                         fname = annot_dir / f'{cls_name}_{inst_id}.txt'
                         np.savetxt(fname, inst_pts, fmt=fmt_spec, delimiter=' ')
 
-                    # Освобождаем память, занятую текущим классом
                     del cls_data, instances, cmask
 
-                # Освобождаем память зоны перед следующей
                 del zx, zy, zz, zcls, zi, zrn, znr, zr, zg, zb
-                print(f'{area_name} done.')
+                print(f'{area_name}/{region_name} done.')
     
     def color_instance(self, x, y, z, class_id):
         """
