@@ -50,92 +50,100 @@ class lasToTxt:
 
     
     def one_to_many_by_classes(self, region_name: str = 'forest_1'):
-        # 1. Сначала определяем границы облака (легкая операция)
-            las = laspy.read(self.las_file_name)
-        #with laspy.open(self.las_file_name) as las:
-            print("las dirs:", dir(las))
-            x_min, x_max = las.x.min(), las.x.max()
-            y_min, y_max = las.y.min(), las.y.max()
-            bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
-            
-            has_color = hasattr(las, 'red')
-            if has_color:
-                print('Las object has real colors.')
-            else:
-                print('Las object is not colored. Procedural coloring will be applied.')
+        # Открываем файл потоково – НЕ загружаем его в память целиком
+        with laspy.open(str(self.las_file_name)) as reader:
+            h = reader.header
+            x_min, x_max = h.x_min, h.x_max
+            y_min, y_max = h.y_min, h.y_max
 
+            # Проверяем наличие цветовых полей в формате файла
+            dim_names = [dim.name.lower() for dim in reader.header.point_format.dimensions]
+            has_color = 'red' in dim_names and 'green' in dim_names and 'blue' in dim_names
+            print('Has colors:', has_color)
+
+            bboxes = self._split_bbox(x_min, x_max, y_min, y_max)
             fmt_spec = ["%.8f", "%.8f", "%.8f", "%d", "%d", "%d", "%f", "%f", "%f", "%f"]
 
-            # 2. Обрабатываем КАЖДУЮ ЗОНУ ОТДЕЛЬНО, загружая только нужные точки
+            # Обрабатываем каждую зону независимо
             for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
                 area_name = self.Areas[area_idx]
-                if area_name == 'Area_1':
-                    continue
+                # Пропускаем Area_1, если нужно (раскомментируйте при необходимости)
+                # if area_name == 'Area_1':
+                #     continue
+
                 annot_dir = self.base_path / area_name / 'Annotations'
                 annot_dir.mkdir(parents=True, exist_ok=True)
-                
                 print(f'Processing {area_name}...')
-                
-                # Загружаем только точки в текущей зоне
-                zone_mask = (las.x >= x0) & (las.x < x1) & (las.y >= y0) & (las.y < y1)
-                
-                if zone_mask.sum() < 100:
-                    print(f'{area_name}: too few points ({zone_mask.sum()}), skipping.')
-                    continue
-                
-                print(f'{area_name}: {zone_mask.sum()} points in zone')
-                
-                # Извлекаем данные только для этой зоны
-                zx = np.asarray(las.x[zone_mask])
-                zy = np.asarray(las.y[zone_mask])
-                zz = np.asarray(las.z[zone_mask])
-                zcls = np.asarray(las.classification[zone_mask])
-                zi = np.asarray(las.intensity[zone_mask], dtype=np.float32)
-                zrn = np.asarray(las.return_number[zone_mask], dtype=np.float32)
-                znr = np.asarray(las.number_of_returns[zone_mask], dtype=np.float32)
-                
+
+                # Списки для накопления точек, попавших в зону
+                zx_list, zy_list, zz_list, zcls_list, zi_list, zrn_list, znr_list = [], [], [], [], [], [], []
                 if has_color:
-                    zr = np.asarray(las.red[zone_mask], dtype=np.uint8)
-                    zg = np.asarray(las.green[zone_mask], dtype=np.uint8)
-                    zb = np.asarray(las.blue[zone_mask], dtype=np.uint8)
+                    zr_list, zg_list, zb_list = [], [], []
+
+                # === Чанковое чтение: проходим по файлу порциями по 2 млн точек ===
+                for chunk in reader.chunk_iterator(2_000_000):
+                    # Быстрая маска для текущего чанка
+                    mask = (chunk.x >= x0) & (chunk.x < x1) & (chunk.y >= y0) & (chunk.y < y1)
+                    if mask.sum() == 0:
+                        continue
+                    # Собираем только нужные точки в списки (не создаём огромные массивы сразу)
+                    zx_list.append(np.asarray(chunk.x[mask]))
+                    zy_list.append(np.asarray(chunk.y[mask]))
+                    zz_list.append(np.asarray(chunk.z[mask]))
+                    zcls_list.append(np.asarray(chunk.classification[mask]))
+                    zi_list.append(np.asarray(chunk.intensity[mask], dtype=np.float32))
+                    zrn_list.append(np.asarray(chunk.return_number[mask], dtype=np.float32))
+                    znr_list.append(np.asarray(chunk.number_of_returns[mask], dtype=np.float32))
+                    if has_color:
+                        zr_list.append(np.asarray(chunk.red[mask], dtype=np.uint8))
+                        zg_list.append(np.asarray(chunk.green[mask], dtype=np.uint8))
+                        zb_list.append(np.asarray(chunk.blue[mask], dtype=np.uint8))
+
+                if not zx_list:
+                    print(f'{area_name}: no points, skipping.')
+                    continue
+
+                # Объединяем чанки в единые массивы для зоны
+                zx = np.concatenate(zx_list)
+                zy = np.concatenate(zy_list)
+                zz = np.concatenate(zz_list)
+                zcls = np.concatenate(zcls_list)
+                zi = np.concatenate(zi_list)
+                zrn = np.concatenate(zrn_list)
+                znr = np.concatenate(znr_list)
+                if has_color:
+                    zr = np.concatenate(zr_list)
+                    zg = np.concatenate(zg_list)
+                    zb = np.concatenate(zb_list)
                 else:
                     zr = np.zeros_like(zx, dtype=np.uint8)
                     zg = np.zeros_like(zx, dtype=np.uint8)
                     zb = np.zeros_like(zx, dtype=np.uint8)
-                
-                # 3. Для каждого класса внутри зоны
+
+                print(f'{area_name}: {len(zx)} points in zone')
+
+                # === Далее идёт ВАША оригинальная логика обработки классов ===
                 for cls_id, cls_name in self.class_names.items():
                     cmask = (zcls == cls_id)
                     if cmask.sum() == 0:
                         continue
-                    
+
                     cx, cy, cz = zx[cmask], zy[cmask], zz[cmask]
                     cr, cg, cb = zr[cmask], zg[cmask], zb[cmask]
-                    ci = zi[cmask]
-                    crn = zrn[cmask]
-                    cnr = znr[cmask]
+                    ci, crn, cnr = zi[cmask], zrn[cmask], znr[cmask]
 
-                    del cmask
-                    
-                    del zx, zy, zz, zcls, zi, zrn, znr, zr, zg, zb
-                    
-                    # Собираем данные класса
                     cls_data = np.column_stack((
                         cx, cy, cz, cr, cg, cb, ci, crn, cnr,
                         np.full(cx.shape, cls_id, dtype=np.float32)
                     ))
 
-                    del crn, cnr
-
-                    # 4. Кластеризация
-                    if cls_id == 2:  # Ground – один объект
+                    # Кластеризация
+                    if cls_id == 2:          # Ground – один экземпляр
                         instances = [cls_data]
                         print(f'  {cls_name}: 1 instance')
                     else:
                         coords = np.column_stack((cx, cy, cz))
-                        del cx, cy, cz
                         clustering = DBSCAN(eps=0.3, min_samples=10).fit(coords)
-                        del coords
                         labels = clustering.labels_
                         instances = []
                         for lbl in np.unique(labels):
@@ -143,31 +151,24 @@ class lasToTxt:
                                 continue
                             instances.append(cls_data[labels == lbl])
                         print(f'  {cls_name}: {len(instances)} instances')
-                    
-                    del cls_data
-                    # 5. Раскраска и сохранение
+
+                    # Раскраска и сохранение
                     for inst_id, inst_pts in enumerate(instances, start=1):
                         if not has_color:
-                            inst_x = inst_pts[:, 0]
-                            inst_y = inst_pts[:, 1]
-                            inst_z = inst_pts[:, 2]
+                            inst_x, inst_y, inst_z = inst_pts[:, 0], inst_pts[:, 1], inst_pts[:, 2]
                             new_r, new_g, new_b = self.color_instance(inst_x, inst_y, inst_z, cls_id)
                             inst_pts[:, 3] = new_r
                             inst_pts[:, 4] = new_g
                             inst_pts[:, 5] = new_b
-                        
                         fname = annot_dir / f'{cls_name}_{inst_id}.txt'
                         np.savetxt(fname, inst_pts, fmt=fmt_spec, delimiter=' ')
-                    
-                    # Очищаем память
-                    del instances
-                
-                # Очищаем данные зоны из памяти
-                
-                
+
+                    # Освобождаем память, занятую текущим классом
+                    del cls_data, instances, cmask
+
+                # Освобождаем память зоны перед следующей
+                del zx, zy, zz, zcls, zi, zrn, znr, zr, zg, zb
                 print(f'{area_name} done.')
-            
-            del las
     
     def color_instance(self, x, y, z, class_id):
         """
