@@ -9,7 +9,7 @@ import math
 from Data.lasColoring import ObjColloring
 
 class lasToTxt:
-    def __init__(self, base_path='Data/S3DIS', Areas = ['Area_1', 'Area_2', 'Area_3', 'Area_4', 'Area_5', 'Area_6']):
+    def __init__(self, base_path='Data/S3DIS', Areas = [f'Area_{i}' for i in range(1, 25)]):
         self.Areas = Areas
         self.base_path = Path(base_path)
         self.folder_paths = [Path(f"Data/S3DIS/{Area}") for Area in self.Areas]
