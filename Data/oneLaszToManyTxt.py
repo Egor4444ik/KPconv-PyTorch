@@ -120,9 +120,11 @@ class lasToTxt:
 
                 if area_name in os.listdir(self.S3DIS_path):
                         if len(os.listdir(self.S3DIS_path.joinpath(f"{area_name}/forest_1/Annotations")))>0:
+
+                            print(f'  {area_name}, already exists')
                             for cls_id, cls_name in self.class_names.items():
-                                zcls = np.concatenate(zcls_list)
-                                cmask = (zcls == cls_id)
+                                #zcls = np.concatenate(zcls_list)
+                                cmask = (zcls_list == cls_id)
                                 print(f'  {cls_name}: {len(instances)} instances')
                             continue
 
