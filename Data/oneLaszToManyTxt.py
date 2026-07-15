@@ -92,7 +92,14 @@ class lasToTxt:
 
             for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
                 area_name = self.Areas[area_idx]
+                
+
                 annot_dir = self.base_path / area_name / region_name / 'Annotations'
+
+                if len(os.listdir(annot_dir))>0:
+                    print(f'  {area_name}, already exists')
+                    continue
+
                 annot_dir.mkdir(parents=True, exist_ok=True)
                 print(f'Processing {area_name}/{region_name}...')
 
@@ -180,14 +187,8 @@ class lasToTxt:
                         if len(valid_instances) < len(instances):
                             print(f'  {cls_name}: dropped {len(instances) - len(valid_instances)} tiny instance(s)')
                         instances = valid_instances
-                        
+
                         print(f'  {cls_name}: {len(instances)} instances')
-
-                    if area_name in os.listdir(self.S3DIS_path):
-                        if len(os.listdir(self.S3DIS_path.joinpath(f"{area_name}/forest_1/Annotations")))>0:
-
-                            print(f'  {area_name}, already exists')
-                            continue
 
                     for inst_id, inst_pts in enumerate(instances, start=1):
                         if not has_color:
