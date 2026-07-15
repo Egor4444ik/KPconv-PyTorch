@@ -104,7 +104,7 @@ class lasToTxt:
                 for chunk in reader.chunk_iterator(2_000_000):
                     mask = (chunk.x >= x0) & (chunk.x < x1) & (chunk.y >= y0) & (chunk.y < y1)
 
-                    print("chunk.classification[mask]:", chunk.classification[mask])
+                    print("chunk.classification[mask]:", np.asarray(chunk.classification[mask]))
                     already_haves_chunk = False
                     if area_name in os.listdir(self.S3DIS_path):
                         if len(os.listdir(self.S3DIS_path.joinpath(f"{area_name}/forest_1/Annotations")))>0:
