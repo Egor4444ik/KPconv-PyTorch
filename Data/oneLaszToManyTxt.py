@@ -96,9 +96,11 @@ class lasToTxt:
 
                 annot_dir = self.base_path / area_name / region_name / 'Annotations'
 
-                if len(os.listdir(annot_dir))>0:
-                    print(f'  {area_name}, already exists')
-                    continue
+                if area_name in os.listdir(annot_dir):
+                        if len(annot_dir)>0:
+
+                            print(f'  {area_name}, already exists')
+                            continue
 
                 annot_dir.mkdir(parents=True, exist_ok=True)
                 print(f'Processing {area_name}/{region_name}...')
