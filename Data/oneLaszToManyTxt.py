@@ -104,7 +104,7 @@ class lasToTxt:
                 for chunk in reader.chunk_iterator(2_000_000):
                     mask = (chunk.x >= x0) & (chunk.x < x1) & (chunk.y >= y0) & (chunk.y < y1)
 
-                    print(chunk.classification[mask])
+                    print("chunk.classification[mask]:", chunk.classification[mask])
                     already_haves_chunk = False
                     if area_name in os.listdir(self.S3DIS_path):
                         if len(os.listdir(self.S3DIS_path.joinpath(f"{area_name}/forest_1/Annotations")))>0:
@@ -125,7 +125,7 @@ class lasToTxt:
                         zb_list.append(np.asarray(chunk.blue[mask], dtype=np.uint8))
 
                 if already_haves_chunk: continue
-                
+
                 if not zx_list:
                     print(f'{area_name}/{region_name}: no points, skipping.')
                     continue
