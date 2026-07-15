@@ -118,9 +118,12 @@ class lasToTxt:
                         zg_list.append(np.asarray(chunk.green[mask], dtype=np.uint8))
                         zb_list.append(np.asarray(chunk.blue[mask], dtype=np.uint8))
 
-                print("chunk.classification[mask]:", zcls_list)
                 if area_name in os.listdir(self.S3DIS_path):
                         if len(os.listdir(self.S3DIS_path.joinpath(f"{area_name}/forest_1/Annotations")))>0:
+                            for cls_id, cls_name in self.class_names.items():
+                                zcls = np.concatenate(zcls_list)
+                                cmask = (zcls == cls_id)
+                                print(f'  {cls_name}: {len(instances)} instances')
                             continue
 
                 if not zx_list:
