@@ -63,6 +63,7 @@ class lasToTxt:
             print('Computing real boundaries from points...')
             x_min = y_min = float('inf')
             x_max = y_max = float('-inf')
+            print("reader classifications:", reader.classification)
             for chunk in reader.chunk_iterator(2_000_000):
                 x_min = min(x_min, chunk.x.min())
                 x_max = max(x_max, chunk.x.max())
@@ -88,7 +89,8 @@ class lasToTxt:
             for area_idx, (x0, x1, y0, y1) in enumerate(bboxes):
                 area_name = self.Areas[area_idx]
                 if area_name in os.listdir(self.S3DIS_path):
-                    continue
+                    if len(os.listdir(self.S3DIS_path.joinpath(f"{area_name}/forest_1/Annotations")))>0:
+                        continue
                 annot_dir = self.base_path / area_name / region_name / 'Annotations'
                 annot_dir.mkdir(parents=True, exist_ok=True)
                 print(f'Processing {area_name}/{region_name}...')

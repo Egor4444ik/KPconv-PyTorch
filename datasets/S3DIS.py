@@ -70,9 +70,7 @@ class S3DISDataset(PointCloudDataset):
         ############
 
         # Dict from labels to names
-        self.label_to_names = {0: 'ground',
-                               1: 'bush',
-                               2: 'tree'}
+        self.label_to_names = {1: 'Unassigned', 2: 'Ground', 3: 'LowerBushe', 4: 'HighBushe', 5: 'Tree', 7: 'Noise', 12: 'Overlap or Reserved'}
 
         # Initialize a bunch of variables concerning class labels
         self.init_labels()
@@ -106,7 +104,7 @@ class S3DISDataset(PointCloudDataset):
         ply_path = join(self.path, self.train_path)
 
         # Proportion of validation scenes
-        self.cloud_names = ['Area_1', 'Area_2', 'Area_3', 'Area_4', 'Area_5', 'Area_6']
+        self.cloud_names = [f'Area_{i}' for i in range(1, 25)]
         lasConverter(self.cloud_names).toTxt()
         lasToTxt(Areas = self.cloud_names).one_to_many_by_classes()
         self.all_splits = [0, 1]
