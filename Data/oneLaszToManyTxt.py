@@ -164,12 +164,6 @@ class lasToTxt:
                             instances.append(cls_data[labels == lbl])
                         print(f'  {cls_name}: {len(instances)} instances (clustered)')
                     else:
-                        # Фильтруем слишком маленькие объекты
-                        min_points = 10   # можно взять из DBSCAN min_samples или задать явно
-                        valid_instances = [inst for inst in instances if inst.shape[0] >= min_points]
-                        if len(valid_instances) < len(instances):
-                            print(f'  {cls_name}: dropped {len(instances) - len(valid_instances)} tiny instance(s)')
-                        instances = valid_instances
 
                         coords = np.column_stack((cx, cy, cz))
                         clustering = DBSCAN(eps=0.3, min_samples=10).fit(coords)
@@ -179,6 +173,14 @@ class lasToTxt:
                             if lbl == -1:
                                 continue
                             instances.append(cls_data[labels == lbl])
+
+                        # Фильтруем слишком маленькие объекты
+                        min_points = 10   # можно взять из DBSCAN min_samples или задать явно
+                        valid_instances = [inst for inst in instances if inst.shape[0] >= min_points]
+                        if len(valid_instances) < len(instances):
+                            print(f'  {cls_name}: dropped {len(instances) - len(valid_instances)} tiny instance(s)')
+                        instances = valid_instances
+                        
                         print(f'  {cls_name}: {len(instances)} instances')
 
                     if area_name in os.listdir(self.S3DIS_path):
