@@ -63,7 +63,11 @@ class lasToTxt:
             print('Computing real boundaries from points...')
             x_min = y_min = float('inf')
             x_max = y_max = float('-inf')
-            print("reader classifications:", reader.classification)
+            
+            las = reader.read()
+            print("las classifications:", las.classification)
+            del las
+
             for chunk in reader.chunk_iterator(2_000_000):
                 x_min = min(x_min, chunk.x.min())
                 x_max = max(x_max, chunk.x.max())
