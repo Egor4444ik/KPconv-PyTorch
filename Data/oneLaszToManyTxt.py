@@ -154,9 +154,23 @@ class lasToTxt:
                     ))
 
                     if cls_id == 2:
-                        instances = [cls_data]
-                        print(f'  {cls_name}: 1 instance')
+                        coords = np.column_stack((cx, cy, cz))
+                        clustering = DBSCAN(eps=1.0, min_samples=10).fit(coords)
+                        labels = clustering.labels_
+                        instances = []
+                        for lbl in np.unique(labels):
+                            if lbl == -1:
+                                continue
+                            instances.append(cls_data[labels == lbl])
+                        print(f'  {cls_name}: {len(instances)} instances (clustered)')
                     else:
+                        # Фильтруем слишком маленькие объекты
+                        min_points = 10   # можно взять из DBSCAN min_samples или задать явно
+                        valid_instances = [inst for inst in instances if inst.shape[0] >= min_points]
+                        if len(valid_instances) < len(instances):
+                            print(f'  {cls_name}: dropped {len(instances) - len(valid_instances)} tiny instance(s)')
+                        instances = valid_instances
+
                         coords = np.column_stack((cx, cy, cz))
                         clustering = DBSCAN(eps=0.3, min_samples=10).fit(coords)
                         labels = clustering.labels_
