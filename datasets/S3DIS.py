@@ -31,6 +31,7 @@ import math
 import warnings
 from multiprocessing import Lock
 
+from pathlib import Path
 
 # OS functions
 import os
@@ -111,7 +112,7 @@ class S3DISDataset(PointCloudDataset):
 
         not_empty_areas = []
         for i, area_name in enumerate(self.cloud_names):
-            annot_dir = 'Data/S3DIS' / area_name / 'forest_1' / 'Annotations'
+            annot_dir = Path('Data/S3DIS') / area_name / 'forest_1' / 'Annotations'
             if len(listdir(annot_dir))>0:
                 not_empty_areas.append(area_name)
         self.cloud_names = not_empty_areas
