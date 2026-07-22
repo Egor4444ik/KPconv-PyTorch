@@ -136,20 +136,20 @@ class S3DISDataset(PointCloudDataset):
         self.files = []
         for i, f in enumerate(self.cloud_names):
             if self.set == 'training':
-                if self.all_splits[i] != self.validation_split[i]:
+                if self.all_splits[i] not in self.validation_split:
                     self.files += [join(ply_path, f + '.ply')]
             elif self.set in ['validation', 'test', 'ERF']:
-                if self.all_splits[i] == self.validation_split[i]:
+                if self.all_splits[i] in self.validation_split:
                     self.files += [join(ply_path, f + '.ply')]
             else:
                 raise ValueError('Unknown set for S3DIS data: ', self.set)
 
         if self.set == 'training':
             self.cloud_names = [f for i, f in enumerate(self.cloud_names)
-                                if self.all_splits[i] != self.validation_split[i]]
+                                if self.all_splits[i] not in self.validation_split]
         elif self.set in ['validation', 'test', 'ERF']:
             self.cloud_names = [f for i, f in enumerate(self.cloud_names)
-                                if self.all_splits[i] == self.validation_split[i]]
+                                if self.all_splits[i] in self.validation_split]
 
         if 0 < self.config.first_subsampling_dl <= 0.01:
             raise ValueError('subsampling_parameter too low (should be over 1 cm')
