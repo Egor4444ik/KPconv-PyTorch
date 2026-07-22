@@ -107,8 +107,8 @@ class S3DISDataset(PointCloudDataset):
         self.cloud_names = [f'Area_{i}' for i in range(1, 25)]
         lasConverter(self.cloud_names).toTxt()
         lasToTxt(Areas = self.cloud_names).one_to_many_by_classes()
-        self.all_splits = [0, 1]
-        self.validation_split = 1
+        self.all_splits = [i for i in range(len(self.cloud_names))]
+        self.validation_split = [i for i in range(int(self.all_splits[-1]*0.7), len(self.cloud_names))]
 
         # Number of models used per epoch
         if self.set == 'training':
@@ -136,20 +136,20 @@ class S3DISDataset(PointCloudDataset):
         self.files = []
         for i, f in enumerate(self.cloud_names):
             if self.set == 'training':
-                if self.all_splits[i] != self.validation_split:
+                if self.all_splits[i] != self.validation_split[i]:
                     self.files += [join(ply_path, f + '.ply')]
             elif self.set in ['validation', 'test', 'ERF']:
-                if self.all_splits[i] == self.validation_split:
+                if self.all_splits[i] == self.validation_split[i]:
                     self.files += [join(ply_path, f + '.ply')]
             else:
                 raise ValueError('Unknown set for S3DIS data: ', self.set)
 
         if self.set == 'training':
             self.cloud_names = [f for i, f in enumerate(self.cloud_names)
-                                if self.all_splits[i] != self.validation_split]
+                                if self.all_splits[i] != self.validation_split[i]]
         elif self.set in ['validation', 'test', 'ERF']:
             self.cloud_names = [f for i, f in enumerate(self.cloud_names)
-                                if self.all_splits[i] == self.validation_split]
+                                if self.all_splits[i] == self.validation_split[i]]
 
         if 0 < self.config.first_subsampling_dl <= 0.01:
             raise ValueError('subsampling_parameter too low (should be over 1 cm')
