@@ -33,6 +33,7 @@ from multiprocessing import Lock
 
 
 # OS functions
+import os
 from os import listdir
 from os.path import exists, join, isdir
 
@@ -107,6 +108,15 @@ class S3DISDataset(PointCloudDataset):
         self.cloud_names = [f'Area_{i}' for i in range(1, 25)]
         lasConverter(self.cloud_names).toTxt()
         lasToTxt(Areas = self.cloud_names).one_to_many_by_classes()
+
+        not_empty_areas = []
+        for i, area_name in enumerate(self.cloud_names):
+            annot_dir = 'Data/S3DIS' / area_name / 'forest_1' / 'Annotations'
+            if len(listdir(annot_dir))>0:
+                not_empty_areas.append(area_name)
+        self.cloud_names = not_empty_areas
+
+
         self.all_splits = [i for i in range(len(self.cloud_names))]
         self.validation_split = [i for i in range(int(self.all_splits[-1]*0.7), len(self.cloud_names))]
 
