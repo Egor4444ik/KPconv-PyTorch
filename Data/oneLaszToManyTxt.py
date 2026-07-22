@@ -97,7 +97,7 @@ class lasToTxt:
                 annot_dir = self.base_path / area_name / region_name / 'Annotations'
 
                 if area_name in os.listdir(self.S3DIS_path):
-                        if len(annot_dir)>0:
+                        if len(os.listdir(annot_dir))>0:
 
                             print(f'  {area_name}, already exists')
                             continue
